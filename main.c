@@ -2,8 +2,13 @@
 #include "console/console.h"
 #include "power/power.h"
 #include "indication/indication.h"
+#include "mems/mems.h"
+#include "shock/shock.h"
 
 #include <stdbool.h>
+
+
+const char* BUILD = "0.1.21122017";
 
 
 void _Error_Handler( char* file, int line )
@@ -90,12 +95,18 @@ int main( void )
 	
 	console_init();
 	
-	//volatile unsigned long long inc = 0;
+	mems_init();
+	shock_init();
+		
+	while( *who_am_i() != 0x71 );
+	
 	while( true )
 	{
-		//ping_uart();
-		//for( inc = 0; inc < 500000; inc++ );
-		//for( inc = 0; inc < 500000; inc++ );
+		//read_self_test();
+		//read_gyro();
 		__nop();
 	}
 }
+
+
+

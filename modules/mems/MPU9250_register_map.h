@@ -1,16 +1,5 @@
-#include "mems/MPU9250.h"
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-
-
-typedef enum
-{
-	SUCCESS,
-	ERROR
-} mpu9520_result;
-
-
+#ifndef __MPU9250_REGISTER_MAP_H
+#define __MPU9250_REGISTER_MAP_H
 
 typedef enum
 {
@@ -117,40 +106,4 @@ typedef enum
 } mpu9520_register;
 
 
-static uint8_t ( *send_receive )( uint16_t ) = NULL;
-
-
-void set_send_receive_function( uint8_t ( *pf )( uint16_t ) )
-{
-	send_receive = pf;
-}
-
-
-
-static void mpu_register_write( mpu9520_register adress, uint8_t value )
-{
-	uint16_t send_data = ( adress << 4 ) + value;
-	send_receive( send_data );
-	return;
-}
-
-
-static uint8_t mpu_register_read( mpu9520_register adress )
-{
-	uint16_t send_data = 0x80 + ( adress << 4 );
-	return send_receive( send_data );
-}
-
-
-void mpu_init( void )
-{
-	mpu_register_read( MPU9520_WHO_AM_I );
-	
-	
-	return;
-}
-
-
-
-
-
+#endif /* __MPU9250_REGISTER_MAP_H */

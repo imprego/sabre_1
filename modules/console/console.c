@@ -39,7 +39,7 @@ void console_init( void )
 	//configure usart
 	__HAL_RCC_USART2_CLK_ENABLE();
 	huart.Instance = USART2;
-  huart.Init.BaudRate = 115200;
+  huart.Init.BaudRate = 921600;
   huart.Init.WordLength = UART_WORDLENGTH_8B;
   huart.Init.StopBits = UART_STOPBITS_1;
   huart.Init.Parity = UART_PARITY_NONE;
@@ -111,12 +111,7 @@ void console_init( void )
 	
 }
 
-/*
-void ping_uart( void )
-{
-	HAL_UART_Transmit_DMA( &huart, "ping uart>>>\n", strlen( "ping uart>>>\n" ) );
-}
-*/
+
 
 static void send( char* data, unsigned short len )
 {
@@ -126,6 +121,7 @@ static void send( char* data, unsigned short len )
 	strncat( TX_DMA_BUFFER, data, len );
 	strncat( TX_DMA_BUFFER, "\n", 1 );
 	
+#warning "HAL_StatusTypeDef"
 	HAL_UART_Transmit_DMA( &huart, ( uint8_t* )TX_DMA_BUFFER, len + 2 );
 	return;
 }
