@@ -251,3 +251,17 @@ void USART2_IRQHandler( void )
 	return;
 }
 
+
+
+void initial_message( char* msg, unsigned short msg_len )
+{
+	TX_DMA_BUFFER = ( char* )malloc( msg_len + 2 );
+	memset( TX_DMA_BUFFER, 0, msg_len + 2 );
+	strncat( TX_DMA_BUFFER, msg, msg_len );
+	strncat( TX_DMA_BUFFER, "\n", 1 );
+	
+#warning "HAL_StatusTypeDef"
+	HAL_UART_Transmit_DMA( &huart, ( uint8_t* )TX_DMA_BUFFER, msg_len + 1 );
+	return;
+}
+

@@ -65,6 +65,8 @@ void mems_init( void )
 	hspi.Init.TIMode = SPI_TIMODE_DISABLE;
 	HAL_SPI_Init( &hspi );
 	
+	HAL_SPI_Transmit( &hspi, transmit_buffer, 2, HAL_MAX_DELAY );
+	
 	return;
 }
 
@@ -204,14 +206,6 @@ uint8_t* read_acc( void )
 	CS_OFF();
 	
 	return receive_buffer;
-}
-
-
-
-
-uint8_t* read_gyro_and_acc( void )
-{
-	return NULL;
 }
 
 

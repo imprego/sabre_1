@@ -6,9 +6,10 @@
 #include "shock/shock.h"
 
 #include <stdbool.h>
+#include <string.h>
 
 
-const char* BUILD = "0.1.21122017";
+const char* BUILD = "0.2:30/01/2018";
 
 
 void _Error_Handler( char* file, int line )
@@ -97,16 +98,13 @@ int main( void )
 	
 	mems_init();
 	shock_init();
-		
-	while( *who_am_i() != 0x71 );
+	
+	initial_message( "THIS IS ALPHA VERSION SABRE PORJECT",
+									strlen("THIS IS ALPHA VERSION SABRE PORJECT") );
 	
 	while( true )
 	{
-		//read_self_test();
-		//read_gyro();
 		__nop();
 	}
 }
-
-
 

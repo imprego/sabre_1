@@ -105,21 +105,6 @@ void GETDATA( int argc, char** argv )
 }
 
 
-void GETVERSION( int argc, char** argv )
-{
-	char answer[ 40 ] = { 0 };
-	
-	strcat( answer, argv[ 0 ] );
-	
-	extern const char* BUILD;
-	strcat( answer, BUILD );
-	
-	send( answer, strlen( answer ) );
-	
-	return;
-}
-
-
 
 void SHUTDOWN( int argc, char** argv )
 {
@@ -137,10 +122,37 @@ void SETNUMBER( int argc, char** argv )
 	return;
 }
 
+void GETSTATUS( int argc, char** argv )
+{
+	char answer[ 80 ] = { 0 };
+	
+	strcat( answer, argv[ 0 ] );
+	
+	for( uint8_t i = 1; i < argc; ++i )
+	{
+		if( strcmp( argv[i], "MEMS" ) == 0 )
+		{
+			strcat( answer, "," );
+			if( *who_am_i() == 0x71 ) strcat( answer, "MEMS_AVAILABLE" );
+			else strcat( answer, "MEMS_NOT_AVAILABLE" );
+		}
+		if( strcmp( argv[i], "VERSION" ) == 0 )
+		{
+			extern const char* BUILD;
+			strcat( answer, "," );
+			strcat( answer, BUILD );
+		}
+	}
+	
+	send( answer, strlen( answer ) );
+	
+	return;
+}
 
 
-const char *FUNCTIONS_NAMES[] = { "PING", "SETSTATE", "GETDATA", "GETVERSION", "SHUTDOWN", "SETNUMBER", NULL };
-void ( *FUNCTIONS_LIST[] )( int, char** ) = { PING, SETSTATE, GETDATA, GETVERSION, SHUTDOWN, SETNUMBER };
+
+const char *FUNCTIONS_NAMES[] = { "PING", "SETSTATE", "GETDATA", "SHUTDOWN", "SETNUMBER", "GETSTATUS", NULL };
+void ( *FUNCTIONS_LIST[] )( int, char** ) = { PING, SETSTATE, GETDATA, SHUTDOWN, SETNUMBER, GETSTATUS };
 
 
 #endif /* __FUNCTIONS_H */
