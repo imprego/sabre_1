@@ -99,6 +99,7 @@ int main( void )
 	mems_init();
 	shock_init();
 	
+	
 	initial_message( "THIS IS ALPHA VERSION SABRE PORJECT",
 									strlen("THIS IS ALPHA VERSION SABRE PORJECT") );
 	

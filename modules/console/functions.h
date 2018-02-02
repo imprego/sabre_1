@@ -69,20 +69,24 @@ void GETDATA( int argc, char** argv )
 	{
 		if( mems_out && first_param == 'm' )
 		{
-			int16_t* temp = NULL;
+			int16_t temp[ 3 ];
+			
+			temp[ 0 ] = temp[ 1 ] = temp[ 2 ] = 0x0000;
 			mems_out = false;
-			temp = ( int16_t* )read_gyro();
+			get_mems_data( GYROSCOPE, ( uint8_t* )&temp );
 			if( mems_format_hex )
-				sprintf( buf, ",GYRO:%X:%X:%X", temp[ 0 ], temp[ 1 ], temp[ 2 ] );
+				sprintf( buf, ",GYRO:%4hX:%4hX:%4hX", *temp, *( temp + 1 ), *( temp + 2 ) );
 			else
-				sprintf( buf, ",GYRO:%d:%d:%d", temp[ 0 ], temp[ 1 ], temp[ 2 ] );
+				sprintf( buf, ",GYRO:%6hd:%6hd:%6hd", *temp, *( temp + 1 ), *( temp + 2 ) );
 			strcat( answer, buf );
 			
-			temp = ( int16_t* )read_acc();
+			
+			temp[ 0 ] = temp[ 1 ] = temp[ 2 ] = 0x0000;
+			get_mems_data( ACCELEROMETER, ( uint8_t* )&temp );
 			if( mems_format_hex )
-				sprintf( buf, ",ACC:%X:%X:%X", temp[ 0 ], temp[ 1 ], temp[ 2 ] );
+				sprintf( buf, ",ACC:%4hX:%4hX:%4hX", *temp, *( temp + 1 ), *( temp + 2 ) );
 			else
-				sprintf( buf, ",ACC:%d:%d:%d", temp[ 0 ], temp[ 1 ], temp[ 2 ] );
+				sprintf( buf, ",ACC:%6hd:%6hd:%6hd", *temp, *( temp + 1 ), *( temp + 2 ) );
 			strcat( answer, buf );
 			first_param = 's';
 		}
@@ -132,8 +136,10 @@ void GETSTATUS( int argc, char** argv )
 	{
 		if( strcmp( argv[i], "MEMS" ) == 0 )
 		{
+			uint8_t temp = 0x00;
+			get_mems_data( WHOAMI, ( uint8_t* )&temp );
 			strcat( answer, "," );
-			if( *who_am_i() == 0x71 ) strcat( answer, "MEMS_AVAILABLE" );
+			if( temp == 0x71 ) strcat( answer, "MEMS_AVAILABLE" );
 			else strcat( answer, "MEMS_NOT_AVAILABLE" );
 		}
 		if( strcmp( argv[i], "VERSION" ) == 0 )

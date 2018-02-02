@@ -5,33 +5,38 @@
 #include <string.h>
 
 
-#define CS_ON() HAL_GPIO_WritePin( GPIOB, GPIO_PIN_12, GPIO_PIN_RESET );
-#define CS_OFF() HAL_GPIO_WritePin( GPIOB, GPIO_PIN_12, GPIO_PIN_SET );
+#define CS_ON()		HAL_GPIO_WritePin( GPIOB, GPIO_PIN_12, GPIO_PIN_RESET )
+#define CS_OFF()	HAL_GPIO_WritePin( GPIOB, GPIO_PIN_12, GPIO_PIN_SET )
 
-
-static uint8_t FUNCTION_ID_current = 0;
-#define FUNCTION_ID_who_am_i							1
-#define FUNCTION_ID_read_gyro							6
-#define FUNCTION_ID_read_acc							6
-
-
-typedef enum
-{
-	MPU9520_REGISTER_READ,
-	MPU9520_REGISTER_WRITE
-} mpu9520_register_mode;
+#define MPU9520_REGISTER_WRITE	0x00
+#define MPU9520_REGISTER_READ		0x80
 
 
 
 static SPI_HandleTypeDef hspi;
 
 static uint8_t transmit_buffer[ 2 ] = { 0 };
-static uint8_t* receive_buffer = NULL;
 
-static void create_message( mpu9520_register_mode mode, mpu9520_register adress, uint8_t data );
+static void spi_init( void );
+static void dma_init( void );
+
+static void read_registers	( mpu9520_register start, uint8_t num_to_read, uint8_t* receive_buffer );
+static void write_register	( mpu9520_register reg, uint8_t value );
+
+static void who_am_i		( uint8_t* recv_buf );
+static void read_gyro		( uint8_t* recv_buf );
+static void read_acc		( uint8_t* recv_buf );
+
 
 
 void mems_init( void )
+{
+	spi_init();
+	dma_init();
+}
+
+
+static void spi_init( void )
 {
 	__HAL_RCC_GPIOB_CLK_ENABLE();
 	GPIO_InitTypeDef gpio;
@@ -45,7 +50,7 @@ void mems_init( void )
 	gpio.Mode = GPIO_MODE_OUTPUT_PP;
 	gpio.Pin = GPIO_PIN_12;
 	HAL_GPIO_Init( GPIOB, &gpio );
-	HAL_GPIO_WritePin( GPIOB, GPIO_PIN_12, GPIO_PIN_SET );
+	CS_OFF();
 	
 	//PA9 -> OUT frameSync
 	//PA8 -> EXTI from MPU
@@ -65,147 +70,99 @@ void mems_init( void )
 	hspi.Init.TIMode = SPI_TIMODE_DISABLE;
 	HAL_SPI_Init( &hspi );
 	
-	HAL_SPI_Transmit( &hspi, transmit_buffer, 2, HAL_MAX_DELAY );
+	
+	write_register( MPU9520_PWR_MGMT_1, 0x80 );
 	
 	return;
 }
 
-static void create_message( mpu9520_register_mode mode, mpu9520_register adress, uint8_t data )
+
+
+static void dma_init( void )
 {
-	switch( mode )
+	return;
+}
+
+
+static void write_register	( mpu9520_register reg, uint8_t value )
+{
+	transmit_buffer[ 0 ] = MPU9520_REGISTER_WRITE | reg;
+	transmit_buffer[ 1 ] = value;
+	
+	CS_ON();
+	HAL_SPI_Transmit( &hspi, transmit_buffer, 2, HAL_MAX_DELAY );
+	CS_OFF();
+}
+
+
+static void read_registers( mpu9520_register start, uint8_t num_to_read, uint8_t* receive_buffer )
+{
+	transmit_buffer[ 0 ] = MPU9520_REGISTER_READ | start;
+	transmit_buffer[ 1 ] = 0x00;
+	
+	
+	for( uint8_t i = 0; i < num_to_read; ++i )
 	{
-		case MPU9520_REGISTER_READ:
-			transmit_buffer[ 0 ] = 0x80 + adress;
+		CS_ON();
+		HAL_SPI_Transmit( &hspi, transmit_buffer, 1, HAL_MAX_DELAY );
+		HAL_SPI_Receive( &hspi, receive_buffer + i, 1, HAL_MAX_DELAY );
+		CS_OFF();
+		transmit_buffer[ 0 ] += 1;
+	}
+	
+	if( num_to_read%2 == 0 )
+	{
+			for( uint8_t i = 0, temp = 0; i < 6; i += 2 )
+		{
+			temp = receive_buffer[ i ];
+			receive_buffer[ i ] = receive_buffer[ i + 1 ];
+			receive_buffer[ i + 1 ] = temp;
+		}
+	}
+}
+
+
+
+
+static void who_am_i( uint8_t* recv_buf )
+{
+	read_registers( MPU9520_WHO_AM_I, 1, recv_buf );
+	return;
+}
+
+static void read_gyro( uint8_t* recv_buf )
+{
+	read_registers( MPU9520_GYRO_XOUT_H, 6, recv_buf );
+	return;
+}
+
+
+static void read_acc( uint8_t* recv_buf )
+{
+	read_registers( MPU9520_ACCEL_XOUT_H, 6, recv_buf );
+	return;
+}
+
+
+
+
+void get_mems_data( data_name name, uint8_t* recv_buf )
+{
+	switch( name )
+	{
+		case WHOAMI:
+			who_am_i( recv_buf );
 			break;
-		case MPU9520_REGISTER_WRITE:
-			transmit_buffer[ 0 ] = adress;
+		case GYROSCOPE:
+			read_gyro( recv_buf );
+			break;
+		case ACCELEROMETER:
+			read_acc( recv_buf );
 			break;
 	}
-	transmit_buffer[ 1 ] = data;
-}
-
-static void memory_allocation_receive_buffer( uint8_t FUNCTION_ID )
-{
-	if( FUNCTION_ID_current == FUNCTION_ID ) return;
-	FUNCTION_ID_current = FUNCTION_ID;
-	if( receive_buffer != NULL )
-	{
-		free( receive_buffer );
-		receive_buffer = NULL;
-	}
-	
-	receive_buffer = ( uint8_t* )malloc( FUNCTION_ID );
-	memset( receive_buffer, 0, FUNCTION_ID );
+	return;
 }
 
 
-
-
-
-
-
-
-uint8_t* who_am_i( void )
-{
-	memory_allocation_receive_buffer( FUNCTION_ID_who_am_i );
-	
-	create_message( MPU9520_REGISTER_READ, MPU9520_WHO_AM_I, 0x00 );
-	CS_ON();
-	HAL_SPI_Transmit( &hspi, transmit_buffer, 1, HAL_MAX_DELAY );
-	HAL_SPI_Receive( &hspi, receive_buffer, 1, HAL_MAX_DELAY );
-	CS_OFF();
-	
-	return receive_buffer;
-}
-
-
-
-
-uint8_t* read_gyro( void )
-{
-	memory_allocation_receive_buffer( FUNCTION_ID_read_gyro );
-	
-	create_message( MPU9520_REGISTER_READ, MPU9520_GYRO_XOUT_L, 0x00 );
-	CS_ON();
-	HAL_SPI_Transmit( &hspi, transmit_buffer, 1, HAL_MAX_DELAY );
-	HAL_SPI_Receive( &hspi, receive_buffer, 1, HAL_MAX_DELAY );
-	CS_OFF();
-	create_message( MPU9520_REGISTER_READ, MPU9520_GYRO_XOUT_H, 0x00 );
-	CS_ON();
-	HAL_SPI_Transmit( &hspi, transmit_buffer, 1, HAL_MAX_DELAY );
-	HAL_SPI_Receive( &hspi, receive_buffer + 1, 1, HAL_MAX_DELAY );
-	CS_OFF();
-	
-	
-	create_message( MPU9520_REGISTER_READ, MPU9520_GYRO_YOUT_L, 0x00 );
-	CS_ON();
-	HAL_SPI_Transmit( &hspi, transmit_buffer, 1, HAL_MAX_DELAY );
-	HAL_SPI_Receive( &hspi, receive_buffer + 2, 1, HAL_MAX_DELAY );
-	CS_OFF();
-	create_message( MPU9520_REGISTER_READ, MPU9520_GYRO_YOUT_H, 0x00 );
-	CS_ON();
-	HAL_SPI_Transmit( &hspi, transmit_buffer, 1, HAL_MAX_DELAY );
-	HAL_SPI_Receive( &hspi, receive_buffer + 3, 1, HAL_MAX_DELAY );
-	CS_OFF();
-	
-	
-	create_message( MPU9520_REGISTER_READ, MPU9520_GYRO_ZOUT_L, 0x00 );
-	CS_ON();
-	HAL_SPI_Transmit( &hspi, transmit_buffer, 1, HAL_MAX_DELAY );
-	HAL_SPI_Receive( &hspi, receive_buffer + 4, 1, HAL_MAX_DELAY );
-	CS_OFF();
-	create_message( MPU9520_REGISTER_READ, MPU9520_GYRO_ZOUT_H, 0x00 );
-	CS_ON();
-	HAL_SPI_Transmit( &hspi, transmit_buffer, 1, HAL_MAX_DELAY );
-	HAL_SPI_Receive( &hspi, receive_buffer + 5, 1, HAL_MAX_DELAY );
-	CS_OFF();
-	
-	return receive_buffer;
-}
-
-
-
-
-uint8_t* read_acc( void )
-{
-	memory_allocation_receive_buffer( FUNCTION_ID_read_acc );
-	
-	create_message( MPU9520_REGISTER_READ, MPU9520_ACCEL_XOUT_L, 0x00 );
-	CS_ON();
-	HAL_SPI_Transmit( &hspi, transmit_buffer, 1, HAL_MAX_DELAY );
-	HAL_SPI_Receive( &hspi, receive_buffer, 1, HAL_MAX_DELAY );
-	CS_OFF();
-	create_message( MPU9520_REGISTER_READ, MPU9520_ACCEL_XOUT_H, 0x00 );
-	CS_ON();
-	HAL_SPI_Transmit( &hspi, transmit_buffer, 1, HAL_MAX_DELAY );
-	HAL_SPI_Receive( &hspi, receive_buffer + 1, 1, HAL_MAX_DELAY );
-	CS_OFF();
-	
-	
-	create_message( MPU9520_REGISTER_READ, MPU9520_ACCEL_YOUT_L, 0x00 );
-	CS_ON();
-	HAL_SPI_Transmit( &hspi, transmit_buffer, 1, HAL_MAX_DELAY );
-	HAL_SPI_Receive( &hspi, receive_buffer + 2, 1, HAL_MAX_DELAY );
-	CS_OFF();
-	create_message( MPU9520_REGISTER_READ, MPU9520_ACCEL_YOUT_H, 0x00 );
-	CS_ON();
-	HAL_SPI_Transmit( &hspi, transmit_buffer, 1, HAL_MAX_DELAY );
-	HAL_SPI_Receive( &hspi, receive_buffer + 3, 1, HAL_MAX_DELAY );
-	CS_OFF();
-	
-	
-	create_message( MPU9520_REGISTER_READ, MPU9520_ACCEL_ZOUT_L, 0x00 );
-	CS_ON();
-	HAL_SPI_Transmit( &hspi, transmit_buffer, 1, HAL_MAX_DELAY );
-	HAL_SPI_Receive( &hspi, receive_buffer + 4, 1, HAL_MAX_DELAY );
-	CS_OFF();
-	create_message( MPU9520_REGISTER_READ, MPU9520_ACCEL_ZOUT_H, 0x00 );
-	CS_ON();
-	HAL_SPI_Transmit( &hspi, transmit_buffer, 1, HAL_MAX_DELAY );
-	HAL_SPI_Receive( &hspi, receive_buffer + 5, 1, HAL_MAX_DELAY );
-	CS_OFF();
-	
-	return receive_buffer;
-}
 
 
