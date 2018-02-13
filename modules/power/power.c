@@ -17,7 +17,7 @@ void power_init( void )
 	gpio.Pull = GPIO_NOPULL;
 	gpio.Speed = GPIO_SPEED_FREQ_LOW;
 	HAL_GPIO_Init( PORT_POWER, &gpio );
-	HAL_GPIO_WritePin( PORT_POWER, PIN_POWER, GPIO_PIN_RESET );
+	HAL_GPIO_WritePin( PORT_POWER, PIN_POWER, GPIO_PIN_SET );
 	return;
 }
 

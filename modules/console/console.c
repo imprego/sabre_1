@@ -29,17 +29,17 @@ void console_init( void )
 	//configure gpio
 	__HAL_RCC_GPIOA_CLK_ENABLE();
 	GPIO_InitTypeDef gpio;
-	gpio.Alternate = GPIO_AF7_USART1;
+	gpio.Alternate = GPIO_AF7_USART2;
 	gpio.Mode = GPIO_MODE_AF_PP;
 	gpio.Pin = GPIO_PIN_2 | GPIO_PIN_3;
-	gpio.Pull = GPIO_NOPULL;
+	gpio.Pull = GPIO_PULLUP;
 	gpio.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
 	HAL_GPIO_Init( GPIOA, &gpio );
 	
 	//configure usart
 	__HAL_RCC_USART2_CLK_ENABLE();
 	huart.Instance = USART2;
-  huart.Init.BaudRate = 921600;
+  huart.Init.BaudRate = 256000;
   huart.Init.WordLength = UART_WORDLENGTH_8B;
   huart.Init.StopBits = UART_STOPBITS_1;
   huart.Init.Parity = UART_PARITY_NONE;
@@ -52,7 +52,6 @@ void console_init( void )
   }
 	//__HAL_UART_ENABLE( &huart );
 	
-	
 	//configure dma rx
 	__HAL_RCC_DMA1_CLK_ENABLE();
 	hdma_rx.Instance = DMA1_Stream5;
@@ -63,7 +62,7 @@ void console_init( void )
   hdma_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
   hdma_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
   hdma_rx.Init.Mode = DMA_NORMAL;
-  hdma_rx.Init.Priority = DMA_PRIORITY_LOW;
+  hdma_rx.Init.Priority = DMA_PRIORITY_VERY_HIGH;
   hdma_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
   if ( HAL_DMA_Init( &hdma_rx ) != HAL_OK )
   {
@@ -80,7 +79,7 @@ void console_init( void )
   hdma_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
   hdma_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
   hdma_tx.Init.Mode = DMA_NORMAL;
-  hdma_tx.Init.Priority = DMA_PRIORITY_LOW;
+  hdma_tx.Init.Priority = DMA_PRIORITY_VERY_HIGH;
   hdma_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
   if ( HAL_DMA_Init( &hdma_tx ) != HAL_OK )
   {
@@ -115,6 +114,7 @@ void console_init( void )
 
 static void send( char* data, unsigned short len )
 {
+	while( TX_DMA_BUFFER != NULL );
 	TX_DMA_BUFFER = ( char* )malloc( len + 3 );
 	memset( TX_DMA_BUFFER, 0, len + 3 );
 	*TX_DMA_BUFFER = 'S';
@@ -214,7 +214,6 @@ static void parse_command( void )
 		message_ptr = temp + 1;
 	}
 	
-	//#error "add free memory!!!"
 	for( int i = 0; i < argc; ++i )
 	{
 		free( argv[ i ] );
@@ -255,6 +254,7 @@ void USART2_IRQHandler( void )
 
 void initial_message( char* msg, unsigned short msg_len )
 {
+	while( TX_DMA_BUFFER != NULL );
 	TX_DMA_BUFFER = ( char* )malloc( msg_len + 2 );
 	memset( TX_DMA_BUFFER, 0, msg_len + 2 );
 	strncat( TX_DMA_BUFFER, msg, msg_len );

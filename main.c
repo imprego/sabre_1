@@ -9,7 +9,7 @@
 #include <string.h>
 
 
-const char* BUILD = "0.2:30/01/2018";
+const char* BUILD = "0.3:13/02/2018";
 
 
 void _Error_Handler( char* file, int line )
@@ -23,6 +23,11 @@ void _Error_Handler( char* file, int line )
 }
 
 
+void SysTick_Handler(void)
+{
+  HAL_IncTick();
+  HAL_SYSTICK_IRQHandler();
+}
 
 
 
@@ -33,6 +38,7 @@ void SystemClock_Config( void )
 
     /**Configure the main internal regulator output voltage 
     */
+	__HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_PWR_CLK_ENABLE();
 
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE2);
@@ -54,7 +60,7 @@ void SystemClock_Config( void )
 
     /**Initializes the CPU, AHB and APB busses clocks 
     */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK/*|RCC_CLOCKTYPE_SYSCLK*/
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;

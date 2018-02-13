@@ -112,7 +112,7 @@ static void read_registers( mpu9520_register start, uint8_t num_to_read, uint8_t
 	
 	if( num_to_read%2 == 0 )
 	{
-			for( uint8_t i = 0, temp = 0; i < 6; i += 2 )
+		for( uint8_t i = 0, temp = 0; i < 6; i += 2 )
 		{
 			temp = receive_buffer[ i ];
 			receive_buffer[ i ] = receive_buffer[ i + 1 ];
