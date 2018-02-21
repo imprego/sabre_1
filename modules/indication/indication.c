@@ -8,6 +8,9 @@
 #define PORT_GREEN	GPIOB
 
 
+extern void _Error_Handler	(char * file, int line);
+
+
 void indication_init( void )
 {
 	__HAL_RCC_GPIOB_CLK_ENABLE();

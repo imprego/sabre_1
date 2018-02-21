@@ -2,7 +2,8 @@
 #include "shock/shock.h"
 
 
-ADC_HandleTypeDef hadc;
+static ADC_HandleTypeDef hadc;
+static DMA_HandleTypeDef hdma_adc;
 
 
 extern void _Error_Handler	(char * file, int line);
@@ -28,28 +29,30 @@ void shock_init( void )
 	hadc.Init.ContinuousConvMode = ENABLE;
 	hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
 	hadc.Init.DiscontinuousConvMode = DISABLE;
-	hadc.Init.DMAContinuousRequests = DISABLE;
-	hadc.Init.EOCSelection = ADC_EOC_SEQ_CONV;
+	hadc.Init.DMAContinuousRequests = ENABLE;
+	hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;//ADC_EOC_SEQ_CONV;
 	hadc.Init.ExternalTrigConv = ADC_SOFTWARE_START;
 	hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
 	hadc.Init.NbrOfConversion = 1;
 	//hadc.Init.NbrOfDiscConversion = ;
 	hadc.Init.Resolution = ADC_RESOLUTION_12B;
 	hadc.Init.ScanConvMode = DISABLE;
-	if (HAL_ADC_Init( &hadc ) != HAL_OK)
+	if ( HAL_ADC_Init( &hadc ) != HAL_OK )
   {
-    _Error_Handler(__FILE__, __LINE__);
+    _Error_Handler( __FILE__, __LINE__ );
   }
 	
 	ADC_ChannelConfTypeDef adc_channel;
 	adc_channel.Channel = ADC_CHANNEL_0;
 	adc_channel.Offset = 0;
 	adc_channel.Rank = 1;
-	adc_channel.SamplingTime = ADC_SAMPLETIME_480CYCLES; //3 15 28 | 56 |  84 112 144 480
-	HAL_ADC_ConfigChannel( &hadc, &adc_channel );
+	adc_channel.SamplingTime = ADC_SAMPLETIME_144CYCLES; //3 15 28 | 56 |  84 112 144 480
+	if ( HAL_ADC_ConfigChannel( &hadc, &adc_channel ) != HAL_OK )
+  {
+    _Error_Handler( __FILE__, __LINE__ );
+  }
 	
 	
-	DMA_HandleTypeDef hdma_adc;
 	
 	__HAL_RCC_DMA2_CLK_ENABLE();
 	hdma_adc.Instance = DMA2_Stream0;
@@ -62,14 +65,17 @@ void shock_init( void )
   hdma_adc.Init.Mode = DMA_CIRCULAR;
   hdma_adc.Init.Priority = DMA_PRIORITY_LOW;
   hdma_adc.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
-	
   if ( HAL_DMA_Init( &hdma_adc ) != HAL_OK )
   {
     _Error_Handler( __FILE__, __LINE__ );
   }
 	__HAL_LINKDMA( &hadc, DMA_Handle, hdma_adc );
 	
-	HAL_ADC_Start_DMA( &hadc, &shocked, 1 );
+	
+	if ( HAL_ADC_Start_DMA( &hadc, &shocked, 1 ) != HAL_OK )
+  {
+    _Error_Handler( __FILE__, __LINE__ );
+  }
 	
 	return;
 }
@@ -80,6 +86,5 @@ uint16_t get_shock_data( void )
 {
 	return ( uint16_t )shocked;
 }
-
 
 

@@ -9,7 +9,7 @@
 #include <string.h>
 
 
-const char* BUILD = "0.3:13/02/2018";
+const char* BUILD = "0.4:21/02/2018";
 
 
 void _Error_Handler( char* file, int line )
@@ -55,7 +55,7 @@ void SystemClock_Config( void )
   RCC_OscInitStruct.PLL.PLLQ = 4;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    _Error_Handler( __FILE__, __LINE__ );
   }
 
     /**Initializes the CPU, AHB and APB busses clocks 
@@ -69,7 +69,7 @@ void SystemClock_Config( void )
 
   if (HAL_RCC_ClockConfig( &RCC_ClkInitStruct, FLASH_LATENCY_2 ) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    _Error_Handler( __FILE__, __LINE__ );
   }
 
     /**Configure the Systick interrupt time 

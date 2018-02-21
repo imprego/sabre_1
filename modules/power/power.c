@@ -6,6 +6,9 @@
 #define PORT_POWER		GPIOB
 
 
+extern void _Error_Handler	(char * file, int line);
+
+
 void power_init( void )
 {
 	__HAL_RCC_GPIOB_CLK_ENABLE();

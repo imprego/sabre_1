@@ -12,6 +12,8 @@
 #define MPU9520_REGISTER_READ		0x80
 
 
+extern void _Error_Handler	(char * file, int line);
+
 
 static SPI_HandleTypeDef hspi;
 
@@ -68,7 +70,10 @@ static void spi_init( void )
 	hspi.Init.Mode = SPI_MODE_MASTER;
 	hspi.Init.NSS = SPI_NSS_SOFT;
 	hspi.Init.TIMode = SPI_TIMODE_DISABLE;
-	HAL_SPI_Init( &hspi );
+	if ( HAL_SPI_Init( &hspi ) != HAL_OK )
+  {
+    _Error_Handler( __FILE__, __LINE__ );
+  }
 	
 	
 	write_register( MPU9520_PWR_MGMT_1, 0x80 );
@@ -90,7 +95,10 @@ static void write_register	( mpu9520_register reg, uint8_t value )
 	transmit_buffer[ 1 ] = value;
 	
 	CS_ON();
-	HAL_SPI_Transmit( &hspi, transmit_buffer, 2, HAL_MAX_DELAY );
+	if ( HAL_SPI_Transmit( &hspi, transmit_buffer, 2, HAL_MAX_DELAY ) != HAL_OK )
+  {
+    _Error_Handler( __FILE__, __LINE__ );
+  }
 	CS_OFF();
 }
 
@@ -104,8 +112,14 @@ static void read_registers( mpu9520_register start, uint8_t num_to_read, uint8_t
 	for( uint8_t i = 0; i < num_to_read; ++i )
 	{
 		CS_ON();
-		HAL_SPI_Transmit( &hspi, transmit_buffer, 1, HAL_MAX_DELAY );
-		HAL_SPI_Receive( &hspi, receive_buffer + i, 1, HAL_MAX_DELAY );
+		if ( HAL_SPI_Transmit( &hspi, transmit_buffer, 1, HAL_MAX_DELAY ) != HAL_OK )
+		{
+			_Error_Handler( __FILE__, __LINE__ );
+		}
+		if ( HAL_SPI_Receive( &hspi, receive_buffer + i, 1, HAL_MAX_DELAY ) != HAL_OK )
+		{
+			_Error_Handler( __FILE__, __LINE__ );
+		}
 		CS_OFF();
 		transmit_buffer[ 0 ] += 1;
 	}

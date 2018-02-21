@@ -13,8 +13,8 @@ static char* TX_DMA_BUFFER = NULL;
 
 static CRC_HandleTypeDef hcrc;
 static UART_HandleTypeDef huart;
-static DMA_HandleTypeDef hdma_rx;
-static DMA_HandleTypeDef hdma_tx;
+static DMA_HandleTypeDef hdma_uart_rx;
+static DMA_HandleTypeDef hdma_uart_tx;
 
 
 extern void _Error_Handler	(char * file, int line);
@@ -50,42 +50,41 @@ void console_init( void )
   {
     _Error_Handler( __FILE__, __LINE__ );
   }
-	//__HAL_UART_ENABLE( &huart );
 	
 	//configure dma rx
 	__HAL_RCC_DMA1_CLK_ENABLE();
-	hdma_rx.Instance = DMA1_Stream5;
-  hdma_rx.Init.Channel = DMA_CHANNEL_4;
-  hdma_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
-  hdma_rx.Init.PeriphInc = DMA_PINC_DISABLE;
-  hdma_rx.Init.MemInc = DMA_MINC_ENABLE;
-  hdma_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
-  hdma_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
-  hdma_rx.Init.Mode = DMA_NORMAL;
-  hdma_rx.Init.Priority = DMA_PRIORITY_VERY_HIGH;
-  hdma_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
-  if ( HAL_DMA_Init( &hdma_rx ) != HAL_OK )
+	hdma_uart_rx.Instance = DMA1_Stream5;
+  hdma_uart_rx.Init.Channel = DMA_CHANNEL_4;
+  hdma_uart_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
+  hdma_uart_rx.Init.PeriphInc = DMA_PINC_DISABLE;
+  hdma_uart_rx.Init.MemInc = DMA_MINC_ENABLE;
+  hdma_uart_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+  hdma_uart_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+  hdma_uart_rx.Init.Mode = DMA_NORMAL;
+  hdma_uart_rx.Init.Priority = DMA_PRIORITY_VERY_HIGH;
+  hdma_uart_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+  if ( HAL_DMA_Init( &hdma_uart_rx ) != HAL_OK )
   {
     _Error_Handler( __FILE__, __LINE__ );
   }
-	__HAL_LINKDMA( &huart, hdmarx, hdma_rx );
+	__HAL_LINKDMA( &huart, hdmarx, hdma_uart_rx );
 	
 	//configure dma tx
-	hdma_tx.Instance = DMA1_Stream6;
-  hdma_tx.Init.Channel = DMA_CHANNEL_4;
-  hdma_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
-  hdma_tx.Init.PeriphInc = DMA_PINC_DISABLE;
-  hdma_tx.Init.MemInc = DMA_MINC_ENABLE;
-  hdma_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
-  hdma_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
-  hdma_tx.Init.Mode = DMA_NORMAL;
-  hdma_tx.Init.Priority = DMA_PRIORITY_VERY_HIGH;
-  hdma_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
-  if ( HAL_DMA_Init( &hdma_tx ) != HAL_OK )
+	hdma_uart_tx.Instance = DMA1_Stream6;
+  hdma_uart_tx.Init.Channel = DMA_CHANNEL_4;
+  hdma_uart_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
+  hdma_uart_tx.Init.PeriphInc = DMA_PINC_DISABLE;
+  hdma_uart_tx.Init.MemInc = DMA_MINC_ENABLE;
+  hdma_uart_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+  hdma_uart_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+  hdma_uart_tx.Init.Mode = DMA_NORMAL;
+  hdma_uart_tx.Init.Priority = DMA_PRIORITY_VERY_HIGH;
+  hdma_uart_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+  if ( HAL_DMA_Init( &hdma_uart_tx ) != HAL_OK )
   {
     _Error_Handler( __FILE__, __LINE__ );
   }
-	__HAL_LINKDMA( &huart, hdmatx, hdma_tx );
+	__HAL_LINKDMA( &huart, hdmatx, hdma_uart_tx );
 	
 	RX_DMA_BUFFER = ( char* )malloc( RX_DMA_BUFFER_SIZE );
 	memset( RX_DMA_BUFFER, 0, RX_DMA_BUFFER_SIZE );
@@ -98,7 +97,11 @@ void console_init( void )
   HAL_NVIC_EnableIRQ( USART2_IRQn );
 	
 	
-	HAL_UART_Receive_DMA( &huart, ( uint8_t* )RX_DMA_BUFFER, RX_DMA_BUFFER_SIZE );
+	if ( HAL_UART_Receive_DMA( &huart, ( uint8_t* )RX_DMA_BUFFER, RX_DMA_BUFFER_SIZE ) != HAL_OK )
+  {
+    _Error_Handler( __FILE__, __LINE__ );
+  }
+	
 	
 	#ifndef WITHOUT_CRC32
 #warning "write crc init!!!"
@@ -121,8 +124,11 @@ static void send( char* data, unsigned short len )
 	strncat( TX_DMA_BUFFER, data, len );
 	strncat( TX_DMA_BUFFER, "\n", 1 );
 	
-#warning "HAL_StatusTypeDef"
-	HAL_UART_Transmit_DMA( &huart, ( uint8_t* )TX_DMA_BUFFER, len + 2 );
+	if ( HAL_UART_Transmit_DMA( &huart, ( uint8_t* )TX_DMA_BUFFER, len + 2 ) != HAL_OK )
+  {
+    _Error_Handler( __FILE__, __LINE__ );
+  }
+	
 	return;
 }
 
@@ -137,9 +143,16 @@ static bool crc32( char *start, char *end )
 
 static void clear_rx_dma_buffer( void )
 {
-	HAL_UART_AbortReceive( &huart );
+	if ( HAL_UART_AbortReceive( &huart ) != HAL_OK )
+  {
+    _Error_Handler( __FILE__, __LINE__ );
+  }
 	memset( RX_DMA_BUFFER, 0, RX_DMA_BUFFER_SIZE );
-	HAL_UART_Receive_DMA( &huart, ( uint8_t* )RX_DMA_BUFFER, RX_DMA_BUFFER_SIZE );
+	if ( HAL_UART_Receive_DMA( &huart, ( uint8_t* )RX_DMA_BUFFER, RX_DMA_BUFFER_SIZE ) != HAL_OK )
+  {
+    _Error_Handler( __FILE__, __LINE__ );
+  }
+	
 }
 
 
@@ -231,7 +244,10 @@ void USART2_IRQHandler( void )
 	if( __HAL_UART_GET_FLAG( &huart, UART_FLAG_TC ) )
 	{
 		__HAL_UART_CLEAR_FLAG( &huart, UART_FLAG_TC );
-		HAL_UART_AbortTransmit( &huart );
+		if ( HAL_UART_AbortTransmit( &huart ) != HAL_OK )
+		{
+			_Error_Handler( __FILE__, __LINE__ );
+		}
 		__HAL_UART_ENABLE_IT( &huart, USART_IT_TC );
 		if( TX_DMA_BUFFER != NULL )
 		{
@@ -260,8 +276,10 @@ void initial_message( char* msg, unsigned short msg_len )
 	strncat( TX_DMA_BUFFER, msg, msg_len );
 	strncat( TX_DMA_BUFFER, "\n", 1 );
 	
-#warning "HAL_StatusTypeDef"
-	HAL_UART_Transmit_DMA( &huart, ( uint8_t* )TX_DMA_BUFFER, msg_len + 1 );
+	if ( HAL_UART_Transmit_DMA( &huart, ( uint8_t* )TX_DMA_BUFFER, msg_len + 1 ) != HAL_OK )
+  {
+    _Error_Handler( __FILE__, __LINE__ );
+  }
 	return;
 }
 
