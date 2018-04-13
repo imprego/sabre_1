@@ -105,5 +105,18 @@ typedef enum
 	MPU9520_ZA_OFFSET_L =       	0x7E
 } mpu9520_register;
 
+typedef enum
+{
+	BIT_NONE = 0x00,
+	BIT0 = 0x01,
+	BIT1 = 0x02,
+	BIT2 = 0x04,
+	BIT3 = 0x08,
+	BIT4 = 0x10,
+	BIT5 = 0x20,
+	BIT6 = 0x40,
+	BIT7 = 0x80
+} BIT;
+
 
 #endif /* __MPU9250_REGISTER_MAP_H */

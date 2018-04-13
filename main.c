@@ -4,12 +4,13 @@
 #include "indication/indication.h"
 #include "mems/mems.h"
 #include "shock/shock.h"
+#include "timers/timers.h"
 
 #include <stdbool.h>
 #include <string.h>
 
 
-const char* BUILD = "0.4:21/02/2018";
+const char* BUILD = "0.5f:13/04/2018";
 
 
 void _Error_Handler( char* file, int line )
@@ -19,7 +20,7 @@ void _Error_Handler( char* file, int line )
   while(1) 
   {
   }
-  /* USER CODE END Error_Handler_Debug */ 
+  /* USER CODE END Error_Handler_Debug */
 }
 
 
@@ -50,7 +51,7 @@ void SystemClock_Config( void )
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 84;
+  RCC_OscInitStruct.PLL.PLLN = 80;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 4;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
@@ -93,21 +94,31 @@ int main( void )
 	HAL_Init();
 	SystemClock_Config();
 	
+	//interrupts init
+	HAL_NVIC_SetPriorityGrouping( NVIC_PRIORITYGROUP_4 );
+	
+	//delays init
+	timers_init();
+	
+	//power button init
 	power_init();
 	set_power( POWER_ON );
 	
+	//uart commands init
+	console_init();
+	//initial message
+	send( "THIS IS ALPHA VERSION SABRE PORJECT",
+									strlen("THIS IS ALPHA VERSION SABRE PORJECT"), true );
+	
+	//leds init
 	indication_init();
 	set_indication( INDICATION_RED, INDICATION_ON );
 	set_indication( INDICATION_GREEN, INDICATION_ON );
 	
-	console_init();
-	
+	//mems sensor init
 	mems_init();
+	//shock sensor init
 	shock_init();
-	
-	
-	initial_message( "THIS IS ALPHA VERSION SABRE PORJECT",
-									strlen("THIS IS ALPHA VERSION SABRE PORJECT") );
 	
 	while( true )
 	{

@@ -52,8 +52,6 @@ void shock_init( void )
     _Error_Handler( __FILE__, __LINE__ );
   }
 	
-	
-	
 	__HAL_RCC_DMA2_CLK_ENABLE();
 	hdma_adc.Instance = DMA2_Stream0;
   hdma_adc.Init.Channel = DMA_CHANNEL_0;
@@ -63,7 +61,7 @@ void shock_init( void )
   hdma_adc.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
   hdma_adc.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
   hdma_adc.Init.Mode = DMA_CIRCULAR;
-  hdma_adc.Init.Priority = DMA_PRIORITY_LOW;
+  hdma_adc.Init.Priority = DMA_PRIORITY_HIGH;
   hdma_adc.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
   if ( HAL_DMA_Init( &hdma_adc ) != HAL_OK )
   {

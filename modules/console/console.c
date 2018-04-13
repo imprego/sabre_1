@@ -1,7 +1,6 @@
 #include "console/console.h"
 #include "stm32f4xx_hal.h"
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
 
 #define RX_DMA_BUFFER_SIZE 64
@@ -18,7 +17,6 @@ static DMA_HandleTypeDef hdma_uart_tx;
 
 
 extern void _Error_Handler	(char * file, int line);
-static void send						( char* data, unsigned short len );
 static bool crc32						( char *start, char *end );
 static void clear_rx_dma_buffer( void );
 static void parse_command		( void );
@@ -39,7 +37,7 @@ void console_init( void )
 	//configure usart
 	__HAL_RCC_USART2_CLK_ENABLE();
 	huart.Instance = USART2;
-  huart.Init.BaudRate = 256000;
+  huart.Init.BaudRate = 460800;
   huart.Init.WordLength = UART_WORDLENGTH_8B;
   huart.Init.StopBits = UART_STOPBITS_1;
   huart.Init.Parity = UART_PARITY_NONE;
@@ -61,7 +59,7 @@ void console_init( void )
   hdma_uart_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
   hdma_uart_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
   hdma_uart_rx.Init.Mode = DMA_NORMAL;
-  hdma_uart_rx.Init.Priority = DMA_PRIORITY_VERY_HIGH;
+  hdma_uart_rx.Init.Priority = DMA_PRIORITY_LOW;
   hdma_uart_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
   if ( HAL_DMA_Init( &hdma_uart_rx ) != HAL_OK )
   {
@@ -78,7 +76,7 @@ void console_init( void )
   hdma_uart_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
   hdma_uart_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
   hdma_uart_tx.Init.Mode = DMA_NORMAL;
-  hdma_uart_tx.Init.Priority = DMA_PRIORITY_VERY_HIGH;
+  hdma_uart_tx.Init.Priority = DMA_PRIORITY_LOW;
   hdma_uart_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
   if ( HAL_DMA_Init( &hdma_uart_tx ) != HAL_OK )
   {
@@ -93,7 +91,7 @@ void console_init( void )
 	__HAL_UART_ENABLE_IT( &huart, USART_IT_TC | UART_IT_IDLE );
 	__HAL_UART_CLEAR_FLAG( &huart, UART_FLAG_TC );
 	__HAL_UART_CLEAR_IDLEFLAG( &huart );
-	HAL_NVIC_SetPriority( USART2_IRQn, 0, 0 );
+	HAL_NVIC_SetPriority( USART2_IRQn, 14, 15 );
   HAL_NVIC_EnableIRQ( USART2_IRQn );
 	
 	
@@ -114,17 +112,43 @@ void console_init( void )
 }
 
 
+bool is_send( void )
+{
+	if( TX_DMA_BUFFER != NULL ) return true;
+	return false;
+}
 
-static void send( char* data, unsigned short len )
+void send( char* data, unsigned short len, bool raw )
 {
 	while( TX_DMA_BUFFER != NULL );
-	TX_DMA_BUFFER = ( char* )malloc( len + 3 );
-	memset( TX_DMA_BUFFER, 0, len + 3 );
-	*TX_DMA_BUFFER = 'S';
-	strncat( TX_DMA_BUFFER, data, len );
+	
+	if( !raw ) len = len + 2;
+	else len = len + 1;
+	
+	TX_DMA_BUFFER = ( char* )malloc( len );
+	
+	if( TX_DMA_BUFFER == NULL )
+	{
+		send( "MEMFAULT", strlen( "MEMFAULT" ), false );
+	}
+	else
+	{
+		if( !raw )
+		{
+			memset( TX_DMA_BUFFER, 0, len );
+			*TX_DMA_BUFFER = 'S';
+			strncat( TX_DMA_BUFFER, data, len - 2 );
+		}
+		else
+		{
+			memset( TX_DMA_BUFFER, 0, len );
+			strncat( TX_DMA_BUFFER, data, len - 1 );
+		}
+	}
+	
 	strncat( TX_DMA_BUFFER, "\n", 1 );
 	
-	if ( HAL_UART_Transmit_DMA( &huart, ( uint8_t* )TX_DMA_BUFFER, len + 2 ) != HAL_OK )
+	if ( HAL_UART_Transmit_DMA( &huart, ( uint8_t* )TX_DMA_BUFFER, len ) != HAL_OK )
   {
     _Error_Handler( __FILE__, __LINE__ );
   }
@@ -215,7 +239,7 @@ static void parse_command( void )
 					break;
 				}
 				if( FUNCTIONS_NAMES[ i + 1 ] == NULL )
-					send( "404\n", strlen( "404\n" ) );
+					send( "404", strlen( "404" ), true );
 			}
 			break;
 		}
@@ -261,25 +285,6 @@ void USART2_IRQHandler( void )
 		parse_command();
 	}
 	
-	//HAL_UART_IRQHandler( &huart );
-	
-	return;
-}
-
-
-
-void initial_message( char* msg, unsigned short msg_len )
-{
-	while( TX_DMA_BUFFER != NULL );
-	TX_DMA_BUFFER = ( char* )malloc( msg_len + 2 );
-	memset( TX_DMA_BUFFER, 0, msg_len + 2 );
-	strncat( TX_DMA_BUFFER, msg, msg_len );
-	strncat( TX_DMA_BUFFER, "\n", 1 );
-	
-	if ( HAL_UART_Transmit_DMA( &huart, ( uint8_t* )TX_DMA_BUFFER, msg_len + 1 ) != HAL_OK )
-  {
-    _Error_Handler( __FILE__, __LINE__ );
-  }
 	return;
 }
 
