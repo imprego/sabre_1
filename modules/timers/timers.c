@@ -10,8 +10,9 @@ static TIM_HandleTypeDef htim;
 
 struct task
 {
-	void (*pf)(void);
-	struct task *next;
+	unsigned int __execute_rate;
+	void (*__pf)(void);
+	struct task *__next;
 };
 
 struct task *task_list = NULL;
@@ -24,18 +25,18 @@ extern void _Error_Handler	(char * file, int line);
 void timers_init( void )
 {
 	/*
-	 * 42 000 000 Hz
-	 * ( 42 000 000 ) / 2 = 21 000 000 -- [ TIM_CLOCKDIVISION_DIV1 ]
-	 * ( 21 000 000 ) / 0x0014 = 1 000 000 -- [ Prescaler - 1 ]
+	 * 40 000 000 Hz
+	 * ( 40 000 000 ) / 2 = 20 000 000 -- [ TIM_CLOCKDIVISION_DIV1 ]
+	 * ( 20 000 000 ) / 0x0013 = 1 000 000 -- [ Prescaler - 1 ]
 	 * ( 1 000 000 ) / 1 000 = 1 000 -- [ Period ]
 	 * tickrate = 1ms
 	 */
 	__HAL_RCC_TIM2_CLK_ENABLE();
-	htim.Instance = TIM2; //42MHz -- APB1
+	htim.Instance = TIM2; //40MHz -- APB1
 	htim.Init.ClockDivision = TIM_CLOCKDIVISION_DIV2;
 	htim.Init.CounterMode= TIM_COUNTERMODE_UP;
 	htim.Init.Period = 1000;
-	htim.Init.Prescaler = 0x0014;
+	htim.Init.Prescaler = 0x0013;
 	if ( HAL_TIM_Base_Init( &htim ) != HAL_OK )
   {
     _Error_Handler( __FILE__, __LINE__ );
@@ -55,18 +56,19 @@ void TIM2_IRQHandler( void )
 	__HAL_TIM_CLEAR_FLAG( &htim, TIM_FLAG_UPDATE );
 	++global_time_ms;
 	
-	HAL_NVIC_DisableIRQ( TIM2_IRQn );
+	//HAL_NVIC_DisableIRQ( TIM2_IRQn );
 	if( task_list != NULL )
 	{
 		struct task *list = task_list;
 		while( true )
 		{
-			list->pf();
-			if( list->next == NULL ) break;
-			else list = list->next;
+			if( !( global_time_ms % list->__execute_rate ) )
+				list->__pf();
+			if( list->__next == NULL ) break;
+			else list = list->__next;
 		}
 	}
-	HAL_NVIC_EnableIRQ( TIM2_IRQn );
+	//HAL_NVIC_EnableIRQ( TIM2_IRQn );
 	return;
 }
 
@@ -83,13 +85,19 @@ void delay_ms( uint32_t delay )
 }
 
 
-void add_task( void (*fun_ptr)(void) )
+void add_task( void (*pf)(void), unsigned int execute_rate )
 {
 	struct task *new_item = ( struct task* )malloc( sizeof( struct task ) );
-	new_item->pf = fun_ptr;
-	new_item->next = task_list;
+	new_item->__pf = pf;
+	new_item->__next = task_list;
+	new_item->__execute_rate = execute_rate;
 	task_list = new_item;
 	return;
+}
+
+uint32_t get_global_time( void )
+{
+	return global_time_ms;
 }
 	
 

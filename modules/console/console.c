@@ -120,7 +120,12 @@ bool is_send( void )
 
 void send( char* data, unsigned short len, bool raw )
 {
-	while( TX_DMA_BUFFER != NULL );
+	if( TX_DMA_BUFFER != NULL )
+	{
+		HAL_NVIC_SetPriority( USART2_IRQn, 0, 15 );
+		while( TX_DMA_BUFFER != NULL );
+		HAL_NVIC_SetPriority( USART2_IRQn, 14, 15 );
+	}
 	
 	if( !raw ) len = len + 2;
 	else len = len + 1;

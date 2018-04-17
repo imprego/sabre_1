@@ -17,9 +17,10 @@ void _Error_Handler( char* file, int line )
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
-  while(1) 
-  {
-  }
+	char str_error[ 80 ] = { 0 };
+	sprintf( str_error, "eror into: %s at line %d", file, line );
+	send( str_error, strlen( str_error ), true );
+  while( true );
   /* USER CODE END Error_Handler_Debug */
 }
 
