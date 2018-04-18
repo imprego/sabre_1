@@ -20,7 +20,7 @@ void _Error_Handler( char* file, int line )
 	char str_error[ 80 ] = { 0 };
 	sprintf( str_error, "eror into: %s at line %d", file, line );
 	send( str_error, strlen( str_error ), true );
-  while( true );
+	abort();
   /* USER CODE END Error_Handler_Debug */
 }
 

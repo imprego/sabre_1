@@ -25,18 +25,15 @@ extern void _Error_Handler	(char * file, int line);
 void timers_init( void )
 {
 	/*
-	 * 40 000 000 Hz
-	 * ( 40 000 000 ) / 2 = 20 000 000 -- [ TIM_CLOCKDIVISION_DIV1 ]
-	 * ( 20 000 000 ) / 0x0013 = 1 000 000 -- [ Prescaler - 1 ]
-	 * ( 1 000 000 ) / 1 000 = 1 000 -- [ Period ]
-	 * tickrate = 1ms
+	 * 40MHz -- APB1
+	 * 80MHz -- TIM2
 	 */
 	__HAL_RCC_TIM2_CLK_ENABLE();
-	htim.Instance = TIM2; //40MHz -- APB1
-	htim.Init.ClockDivision = TIM_CLOCKDIVISION_DIV2;
+	htim.Instance = TIM2;
+	htim.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
 	htim.Init.CounterMode= TIM_COUNTERMODE_UP;
-	htim.Init.Period = 1000;
-	htim.Init.Prescaler = 0x0013;
+	htim.Init.Period = 999;
+	htim.Init.Prescaler = 79;
 	if ( HAL_TIM_Base_Init( &htim ) != HAL_OK )
   {
     _Error_Handler( __FILE__, __LINE__ );

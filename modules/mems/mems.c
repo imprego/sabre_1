@@ -54,28 +54,6 @@ static void read_reg		( uint8_t* recv_buf );
 
 
 
-
-void tmp_func( void )
-{
-	static uint16_t value = 0xFFFF;
-	static uint32_t time_stamp = 0x00000000;
-	
-	uint16_t fifo_count = 0x0000;
-	read_register( MPU9520_FIFO_COUNTH, ( uint8_t* )&fifo_count, 2 );
-	fifo_count = ( fifo_count >> 8 ) + ( fifo_count << 8 );
-	
-	if( value != fifo_count )
-	{
-		value = fifo_count;
-		
-		char tmp_time[ 20 ] = { 0 };
-		sprintf( tmp_time, "%3d bytes in %dmc", fifo_count, get_global_time() - time_stamp );
-		time_stamp = get_global_time();
-		send( tmp_time, strlen( tmp_time ), true );
-	}
-}
-
-
 void mems_init( void )
 {
 	for( uint8_t i = 0; i < FIFO_BANK_SECTIONS; ++i )
@@ -89,7 +67,6 @@ void mems_init( void )
 	spi_init( 20000 );
 	
 	add_task( mems_sync, 1 );
-	add_task( tmp_func, 1 );
 	//add_task( print_fifo_proc, 10 );
 	//add_task( mems_read_fifo_proc, 5 );
 }
@@ -121,7 +98,7 @@ static void spi_init( uint32_t spiMaxSpeedInKHz )
 	gpio.Pin = GPIO_PIN_8;
 	HAL_GPIO_Init( GPIOA, &gpio );
 	HAL_NVIC_SetPriority( EXTI9_5_IRQn, 10, 15 );
-	//HAL_NVIC_EnableIRQ( EXTI9_5_IRQn );
+	HAL_NVIC_EnableIRQ( EXTI9_5_IRQn );
 	
 	
 	//PA9 -> OUT frameSync
@@ -222,9 +199,9 @@ static void dma_init( void )
 
 void mems_sync( void )
 {
-	HAL_GPIO_TogglePin( GPIOA, GPIO_PIN_9 );
-	//HAL_GPIO_WritePin( GPIOA, GPIO_PIN_9, GPIO_PIN_SET );
-	//HAL_GPIO_WritePin( GPIOA, GPIO_PIN_9, GPIO_PIN_RESET );
+	//HAL_GPIO_TogglePin( GPIOA, GPIO_PIN_9 );
+	HAL_GPIO_WritePin( GPIOA, GPIO_PIN_9, GPIO_PIN_SET );
+	HAL_GPIO_WritePin( GPIOA, GPIO_PIN_9, GPIO_PIN_RESET );
 	return;
 }
 
@@ -261,9 +238,13 @@ void mems_read_fifo_proc( void )
 void EXTI9_5_IRQHandler( void )
 {
 	__HAL_GPIO_EXTI_CLEAR_IT( GPIO_PIN_8 );
-
+	
+	static uint32_t timestamp = 0x00000000;
 	char tmp[ 20 ] = { 0 };
-	sprintf( tmp, "data ready at %d", get_global_time() );
+	
+	sprintf( tmp, "data ready at %dms", get_global_time() - timestamp );
+	timestamp = get_global_time();
+	
 	send( tmp, strlen( tmp ), true );
 	
 	return;
@@ -285,12 +266,9 @@ static void periph_init( void )
 	
 	//reset mpu and set osc clock source
 	write_register( MPU9520_PWR_MGMT_1, BIT7 );
-	
-	//wait for reset
-	delay_ms( 200 );
-	
 	//set osc to pll
-	write_register( MPU9520_PWR_MGMT_1, ( 0x01 ) );
+	write_register( MPU9520_PWR_MGMT_1, ( 0x02 ) );
+	
 	send( "reset mpu", strlen( "reset mpu" ), true );
 	
 	if( !mems_is_accessable() )
@@ -304,6 +282,7 @@ static void periph_init( void )
 	write_register( MPU9520_USER_CTRL, BIT6 | BIT4 | BIT2 | BIT0 );
 	send( "reset periph", strlen( "reset periph" ), true );
 	
+	
 	//set LPF on Gyro to 92Hz and FSYNC
 	/*
 	HAL_GPIO_WritePin( GPIOA, GPIO_PIN_9, GPIO_PIN_SET );
@@ -315,7 +294,11 @@ static void periph_init( void )
 	HAL_GPIO_WritePin( GPIOA, GPIO_PIN_9, GPIO_PIN_RESET );
 	*/
 	
-	write_register( MPU9520_CONFIG, BIT6 | ( 0x01 ) );
+	// set srdiv
+	write_register( MPU9520_SMPLRT_DIV, 249 );
+	send( "set srdiv", strlen( "set srdiv" ), true );
+	
+	write_register( MPU9520_CONFIG, BIT6 | ( 0x02 ) );
 	send( "set config", strlen( "set config" ), true );
 	
 	//enable LPF -- ORate 1kHz
@@ -323,27 +306,16 @@ static void periph_init( void )
 	//send( "set gyro config", strlen( "set gyro config" ), true );
 	
 	//set and enable LPF on Acc to 99Hz -- ORate 1kHz
-	write_register( MPU9520_ACCEL_CONFIG_2, ( 0x01 ) );
+	write_register( MPU9520_ACCEL_CONFIG_2, 0x02 );
 	send( "set acc config", strlen( "set acc config" ), true );
 	
-	// set srdiv
-	write_register( MPU9520_SMPLRT_DIV, 0xF9 );
-	send( "set srdiv", strlen( "set srdiv" ), true );
-	
-	delay_ms( 50 );
-	
-	//setup pin_int config
-	write_register( MPU9520_INT_PIN_CFG, /*BIT5 |*/ BIT4 );
-	send( "set int pin", strlen( "set int pin" ), true );
-	
-	//setup pin_int to fifo oveflow
+	//setup pin_int to data ready
 	write_register( MPU9520_INT_ENABLE, BIT0 );
 	send( "set intpin to data ready", strlen( "set intpin to data ready" ), true );
 	
-	
 	//add to fifo Gyro and Acc
-	write_register( MPU9520_FIFO_EN, /*BIT3 | BIT4 | BIT5 | BIT6*/ BIT7 );
-	send( "fifo enable", strlen( "fifo enable" ), true );
+	//write_register( MPU9520_FIFO_EN, /*BIT3 | BIT4 | BIT5 | BIT6*/ BIT7 );
+	//send( "fifo enable", strlen( "fifo enable" ), true );
 	send( "setup end", strlen( "setup end" ), true );
 	
 	return;
