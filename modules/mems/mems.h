@@ -2,19 +2,15 @@
 #define __MEMS_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
-typedef enum
-{
-	GYROSCOPE,
-	ACCELEROMETER,
-	WHOAMI,
-	READREG
-} data_name;
+void vMemsInitProc( void* vParams );
+void vMemsWorkProc( void* vParams );
+void vMemsSyncProc( void* vParams );
 
-void mems_init( void );
 bool mems_is_accessable( void );
-void get_mems_data( data_name name, uint8_t* recv_buf );
-void print_fifo( bool new_print, char *new_format, bool new_full, bool new_endless );
-
+void get_acc_gyro_data( uint8_t* recv_buf );
+void flush_fifo_buf( void );
+uint16_t** get_acc_gyro_buf( void );
 
 #endif /* __MEMS_H */

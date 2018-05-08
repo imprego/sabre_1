@@ -3,9 +3,8 @@
 
 #include <stdbool.h>
 
-void console_init( void );
-bool is_send( void );
+void vConsoleInitProc( void* vParams );
+void vConsoleWorkProc( void* vParams );
 void send( char* data, unsigned short len, bool raw );
-
 
 #endif /* __CONSOLE_H */

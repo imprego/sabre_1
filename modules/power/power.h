@@ -3,8 +3,8 @@
 
 typedef enum
 {
-	POWER_ON,
-	POWER_OFF
+	POWER_ON = 0x01,
+	POWER_OFF = 0x02
 } power_state;
 
 void power_init( void );

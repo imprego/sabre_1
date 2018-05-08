@@ -1,40 +1,45 @@
 #include "stm32f4xx_hal.h"
 #include "shock/shock.h"
 
+#include <string.h>
+
+#define SHOCK_BUF_SIZE						25
+#define SHOCK_BUF_SECTIONS				4
+
+extern void _Error_Handler( char* file, int line );
+
 
 static ADC_HandleTypeDef hadc;
 static DMA_HandleTypeDef hdma_adc;
 
-
-extern void _Error_Handler	(char * file, int line);
-
-static uint32_t shocked = 0x00000000;
+static uint16_t shock_buf[ SHOCK_BUF_SECTIONS ][ SHOCK_BUF_SIZE ] = { 0 };
+static uint16_t *shock_buf_ptr[ SHOCK_BUF_SECTIONS ] = { NULL };
 
 
 void shock_init( void )
 {
 	__HAL_RCC_GPIOA_CLK_ENABLE();
 	GPIO_InitTypeDef gpio;
-	//gpio.Alternate = GPIO_AF5_SPI2;
 	gpio.Mode = GPIO_MODE_ANALOG;
 	gpio.Pin = GPIO_PIN_0;
 	gpio.Pull = GPIO_NOPULL;
 	gpio.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
 	HAL_GPIO_Init( GPIOA, &gpio );
 	
-	
 	__HAL_RCC_ADC1_CLK_ENABLE();
 	hadc.Instance = ADC1;
+	// 80/6=13.3MHz < 15(typ) or 18(max) up to 2.4V
+	// 80/4=20MHz < 30(typ) or 36(max) up to 3.6V
 	hadc.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
 	hadc.Init.ContinuousConvMode = ENABLE;
 	hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
 	hadc.Init.DiscontinuousConvMode = DISABLE;
 	hadc.Init.DMAContinuousRequests = ENABLE;
-	hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;//ADC_EOC_SEQ_CONV;
-	hadc.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-	hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+	hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+	hadc.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T2_TRGO;
+	hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
 	hadc.Init.NbrOfConversion = 1;
-	//hadc.Init.NbrOfDiscConversion = ;
+	hadc.Init.NbrOfDiscConversion = 1;
 	hadc.Init.Resolution = ADC_RESOLUTION_12B;
 	hadc.Init.ScanConvMode = DISABLE;
 	if ( HAL_ADC_Init( &hadc ) != HAL_OK )
@@ -70,7 +75,18 @@ void shock_init( void )
 	__HAL_LINKDMA( &hadc, DMA_Handle, hdma_adc );
 	
 	
-	if ( HAL_ADC_Start_DMA( &hadc, &shocked, 1 ) != HAL_OK )
+	__HAL_DMA_CLEAR_FLAG( &hdma_adc, DMA_FLAG_TCIF0_4 );
+	__HAL_DMA_ENABLE_IT( &hdma_adc, DMA_IT_TC );
+	HAL_NVIC_SetPriority( DMA2_Stream0_IRQn, 0xA, 0x0 );
+	HAL_NVIC_EnableIRQ( DMA2_Stream0_IRQn );
+	
+	
+	for( uint8_t i = 0; i < SHOCK_BUF_SECTIONS; ++i )
+	{
+		shock_buf_ptr[ i ] = shock_buf[ i ];
+	}
+	
+	if ( HAL_ADC_Start_DMA( &hadc, ( uint32_t* )shock_buf_ptr[ SHOCK_BUF_SECTIONS - 1 ], SHOCK_BUF_SIZE ) != HAL_OK )
   {
     _Error_Handler( __FILE__, __LINE__ );
   }
@@ -79,10 +95,60 @@ void shock_init( void )
 }
 
 
-
-uint16_t get_shock_data( void )
+void DMA2_Stream0_IRQHandler( void )
 {
-	return ( uint16_t )shocked;
+	__HAL_DMA_CLEAR_FLAG( &hdma_adc, DMA_FLAG_TCIF0_4 );
+	
+	if ( HAL_ADC_Stop_DMA( &hadc ) != HAL_OK )
+  {
+    _Error_Handler( __FILE__, __LINE__ );
+  }
+	
+	uint16_t* tmp = shock_buf_ptr[ 0 ];
+	for( uint8_t i = 0; i < SHOCK_BUF_SECTIONS - 1; ++i )
+				shock_buf_ptr[ i ] = shock_buf_ptr[ i + 1 ];
+	shock_buf_ptr[ SHOCK_BUF_SECTIONS - 1 ] = tmp;
+	
+	if ( HAL_ADC_Start_DMA( &hadc, ( uint32_t* )shock_buf_ptr[ SHOCK_BUF_SECTIONS - 1 ], SHOCK_BUF_SIZE ) != HAL_OK )
+  {
+    _Error_Handler( __FILE__, __LINE__ );
+  }
+	
+	return;
 }
 
 
+uint16_t get_shock_data( void )
+{
+#warning "check dma counter values"
+	//uint16_t dma_counter = __HAL_DMA_GET_COUNTER( &hdma_adc );
+	return *( shock_buf_ptr[ SHOCK_BUF_SECTIONS - 1 ] + __HAL_DMA_GET_COUNTER( &hdma_adc ) );
+}
+
+
+uint16_t** get_shock_buf( void )
+{
+	return shock_buf_ptr;
+}
+
+
+void flush_shock_buf( void )
+{
+	if ( HAL_ADC_Stop_DMA( &hadc ) != HAL_OK )
+  {
+    _Error_Handler( __FILE__, __LINE__ );
+  }
+	
+	for( uint8_t i = 0; i < SHOCK_BUF_SECTIONS; ++i )
+	{
+		memset( shock_buf[ i ], 0, SHOCK_BUF_SIZE * 2 );
+		shock_buf_ptr[ i ] = shock_buf[ i ];
+	}
+	
+	if ( HAL_ADC_Start_DMA( &hadc, ( uint32_t* )shock_buf_ptr[ SHOCK_BUF_SECTIONS - 1 ], SHOCK_BUF_SIZE ) != HAL_OK )
+  {
+    _Error_Handler( __FILE__, __LINE__ );
+  }
+	
+	return;
+}

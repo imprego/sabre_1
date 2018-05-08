@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+extern void _Error_Handler	(char * file, int line);
+
 
 static volatile uint32_t global_time_ms = 0;
 static TIM_HandleTypeDef htim;
@@ -15,11 +17,8 @@ struct task
 	struct task *__next;
 };
 
-struct task *task_list = NULL;
+static struct task *task_list = NULL;
 
-
-
-extern void _Error_Handler	(char * file, int line);
 
 
 void timers_init( void )
@@ -32,17 +31,21 @@ void timers_init( void )
 	htim.Instance = TIM2;
 	htim.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
 	htim.Init.CounterMode= TIM_COUNTERMODE_UP;
-	htim.Init.Period = 999;
-	htim.Init.Prescaler = 79;
+	htim.Init.Period = 1000;
+	htim.Init.Prescaler = 80 - 1;
 	if ( HAL_TIM_Base_Init( &htim ) != HAL_OK )
   {
     _Error_Handler( __FILE__, __LINE__ );
   }
 	
+	TIM_MasterConfigTypeDef tim_trigger;
+	tim_trigger.MasterOutputTrigger = TIM_TRGO_UPDATE;
+	tim_trigger.MasterSlaveMode = TIM_MASTERSLAVEMODE_ENABLE;
+	HAL_TIMEx_MasterConfigSynchronization( &htim, &tim_trigger );
+	
 	__HAL_TIM_ENABLE_IT( &htim, TIM_IT_UPDATE );
 	HAL_NVIC_SetPriority( TIM2_IRQn, 15, 15 );
 	HAL_NVIC_EnableIRQ( TIM2_IRQn );
-	HAL_TIM_Base_Start( &htim );
 	
 	return;
 }
@@ -96,5 +99,9 @@ uint32_t get_global_time( void )
 {
 	return global_time_ms;
 }
-	
 
+void start_timer( void )
+{
+	HAL_TIM_Base_Start( &htim );
+	return;
+}

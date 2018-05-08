@@ -3,7 +3,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "FreeRTOS.h"
+#include "task.h"
+#include "semphr.h"
+
 #define RX_DMA_BUFFER_SIZE 64
+#define MAX_COMMAND_PARAMETERS 16
+
+extern void _Error_Handler( char * file, int line );
 
 
 static char* RX_DMA_BUFFER = NULL;
@@ -15,14 +22,13 @@ static UART_HandleTypeDef huart;
 static DMA_HandleTypeDef hdma_uart_rx;
 static DMA_HandleTypeDef hdma_uart_tx;
 
+TaskHandle_t vConsoleWorkProcHandle = NULL;
+SemaphoreHandle_t vConsoleSendSemaphore = NULL;
 
-extern void _Error_Handler	(char * file, int line);
-static bool crc32						( char *start, char *end );
-static void clear_rx_dma_buffer( void );
-static void parse_command		( void );
+static inline void clear_rx_dma_buffer( void );
 
 
-void console_init( void )
+void vConsoleInitProc( void* vParams )
 {
 	//configure gpio
 	__HAL_RCC_GPIOA_CLK_ENABLE();
@@ -37,7 +43,7 @@ void console_init( void )
 	//configure usart
 	__HAL_RCC_USART2_CLK_ENABLE();
 	huart.Instance = USART2;
-  huart.Init.BaudRate = 460800;
+  huart.Init.BaudRate = 256000;
   huart.Init.WordLength = UART_WORDLENGTH_8B;
   huart.Init.StopBits = UART_STOPBITS_1;
   huart.Init.Parity = UART_PARITY_NONE;
@@ -84,14 +90,14 @@ void console_init( void )
   }
 	__HAL_LINKDMA( &huart, hdmatx, hdma_uart_tx );
 	
-	RX_DMA_BUFFER = ( char* )malloc( RX_DMA_BUFFER_SIZE );
+	RX_DMA_BUFFER = ( char* )pvPortMalloc( RX_DMA_BUFFER_SIZE );
 	memset( RX_DMA_BUFFER, 0, RX_DMA_BUFFER_SIZE );
 	
 	
-	__HAL_UART_ENABLE_IT( &huart, USART_IT_TC | UART_IT_IDLE );
 	__HAL_UART_CLEAR_FLAG( &huart, UART_FLAG_TC );
 	__HAL_UART_CLEAR_IDLEFLAG( &huart );
-	HAL_NVIC_SetPriority( USART2_IRQn, 14, 15 );
+	__HAL_UART_ENABLE_IT( &huart, USART_IT_TC | UART_IT_IDLE );
+	HAL_NVIC_SetPriority( USART2_IRQn, 0xE, 0x0 );
   HAL_NVIC_EnableIRQ( USART2_IRQn );
 	
 	
@@ -100,41 +106,103 @@ void console_init( void )
     _Error_Handler( __FILE__, __LINE__ );
   }
 	
+	 if( ( vConsoleSendSemaphore = xSemaphoreCreateBinary() ) == NULL )
+		 _Error_Handler( __FILE__, __LINE__ );
+	 xSemaphoreGive( vConsoleSendSemaphore );
 	
-	#ifndef WITHOUT_CRC32
-#warning "write crc init!!!"
-	//crc module on
-	__HAL_RCC_CRC_CLK_ENABLE();
-	HAL_CRC_DeInit( &hcrc );
-	HAL_CRC_Init( &hcrc );
-	#endif
+	//initial message
+	send( "THIS IS ALPHA VERSION SABRE PROJECT",
+				strlen("THIS IS ALPHA VERSION SABRE PROJECT"), true );
 	
+	
+	vTaskDelete( NULL );
+	vTaskDelay( 0 );
+	return;
 }
 
 
-bool is_send( void )
+void vConsoleWorkProc( void* vParams )
 {
-	if( TX_DMA_BUFFER != NULL ) return true;
-	return false;
+	extern const char *FUNCTIONS_NAMES[];
+	extern void ( *FUNCTIONS_LIST[] )( int, char** );
+	
+	char* temp = NULL;
+	char* message_ptr = RX_DMA_BUFFER + 1;
+	int argc = 0;
+	char *argv[ 10 ] = { NULL };
+	
+	while( true )
+	{
+		ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
+		
+		if( *RX_DMA_BUFFER != 'M' || strchr( RX_DMA_BUFFER, '\n' ) == NULL )
+		{
+			clear_rx_dma_buffer();
+			continue;
+		}
+		
+		message_ptr = RX_DMA_BUFFER + 1;
+		argc = 0;
+		
+		while( true )
+		{
+			if( ( temp = strchr( message_ptr, ',' ) ) == NULL )
+			{
+				temp = strchr( message_ptr, '\n' );
+				++argc;
+				if( argc == MAX_COMMAND_PARAMETERS ) _Error_Handler( __FILE__, __LINE__ ); 
+				argv[ argc - 1 ] = ( char* )pvPortMalloc( temp - message_ptr + 1 );
+				memset( argv[ argc - 1 ], 0, temp - message_ptr + 1 );
+				memcpy( argv[ argc - 1 ], message_ptr, temp - message_ptr );
+				
+				//call function!!!
+				for( unsigned int i = 0; FUNCTIONS_NAMES[ i ] != NULL; ++i )
+				{
+					clear_rx_dma_buffer();
+					if( strcmp( argv[ 0 ], FUNCTIONS_NAMES[ i ] ) == 0 )
+					{
+						( *FUNCTIONS_LIST[ i ] )( argc, argv );
+						break;
+					}
+					if( FUNCTIONS_NAMES[ i + 1 ] == NULL )
+						send( "404", strlen( "404" ), true );
+				}
+				break;
+			}
+			++argc;
+			argv[ argc - 1 ] = ( char* )pvPortMalloc( temp - message_ptr + 1 );
+			memset( argv[ argc - 1 ], 0, temp - message_ptr + 1 );
+			memcpy( argv[ argc - 1 ], message_ptr, temp - message_ptr );
+			message_ptr = temp + 1;
+		}
+		
+		for( int i = 0; i < argc; ++i )
+		{
+			vPortFree( argv[ i ] );
+			argv[ i ] = NULL;
+		}
+	}
 }
+
 
 void send( char* data, unsigned short len, bool raw )
 {
-	if( TX_DMA_BUFFER != NULL )
-	{
-		HAL_NVIC_SetPriority( USART2_IRQn, 0, 15 );
-		while( TX_DMA_BUFFER != NULL );
-		HAL_NVIC_SetPriority( USART2_IRQn, 14, 15 );
-	}
+	xSemaphoreTake( vConsoleSendSemaphore, portMAX_DELAY );
 	
 	if( !raw ) len = len + 2;
 	else len = len + 1;
 	
-	TX_DMA_BUFFER = ( char* )malloc( len );
+	if( TX_DMA_BUFFER != NULL )
+	{
+		vPortFree( TX_DMA_BUFFER );
+		TX_DMA_BUFFER = NULL;
+	}
+	TX_DMA_BUFFER = ( char* )pvPortMalloc( len );
 	
 	if( TX_DMA_BUFFER == NULL )
 	{
 		send( "MEMFAULT", strlen( "MEMFAULT" ), false );
+		return;
 	}
 	else
 	{
@@ -162,15 +230,7 @@ void send( char* data, unsigned short len, bool raw )
 }
 
 
-static bool crc32( char *start, char *end )
-{
-#warning "write crc calc!!!"
-	HAL_CRC_Calculate( &hcrc, ( uint32_t* )start, end - start );
-	return false;
-}
-
-
-static void clear_rx_dma_buffer( void )
+static inline void clear_rx_dma_buffer( void )
 {
 	if ( HAL_UART_AbortReceive( &huart ) != HAL_OK )
   {
@@ -181,91 +241,8 @@ static void clear_rx_dma_buffer( void )
   {
     _Error_Handler( __FILE__, __LINE__ );
   }
-	
-}
-
-
-#include "console/functions.h"
-static void parse_command( void )
-{
-	if( *RX_DMA_BUFFER != 'M' )
-	{
-		clear_rx_dma_buffer();
-		return;
-	}
-	if( strchr( RX_DMA_BUFFER, '\n' ) == NULL )
-	{
-		clear_rx_dma_buffer();
-		return;
-	}
-	
-	
-	char *temp = NULL;
-	char* message_ptr = RX_DMA_BUFFER + 1;
-	int argc = 0;
-	char **argv = NULL;
-	
-	
-	#ifndef WITHOUT_CRC32
-	if( ( temp = strchr( RX_DMA_BUFFER, '*' ) ) == NULL )
-	{
-		clear_rx_dma_buffer();
-		return;
-	}
-	if( !crc32( RX_DMA_BUFFER, message_end ) )
-	{
-		clear_rx_dma_buffer();
-		return;
-	}
-	++temp;
-	*temp = '\n';
-	#endif
-	
-	
-	
-	while( true )
-	{
-		if( ( temp = strchr( message_ptr, ',' ) ) == NULL )
-		{
-			temp = strchr( message_ptr, '\n' );
-			++argc;
-			argv = ( char** )realloc( argv, argc * sizeof( char* ) );
-			argv[ argc - 1 ] = ( char* )malloc( temp - message_ptr + 1 );
-			memset( argv[ argc - 1 ], 0, temp - message_ptr + 1 );
-			memcpy( argv[ argc - 1 ], message_ptr, temp - message_ptr );
-			
-			//call function!!!
-			for( unsigned int i = 0; FUNCTIONS_NAMES[ i ] != NULL; ++i )
-			{
-				clear_rx_dma_buffer();
-				if( strcmp( argv[ 0 ], FUNCTIONS_NAMES[ i ] ) == 0 )
-				{
-					( *FUNCTIONS_LIST[ i ] )( argc, argv );
-					break;
-				}
-				if( FUNCTIONS_NAMES[ i + 1 ] == NULL )
-					send( "404", strlen( "404" ), true );
-			}
-			break;
-		}
-		++argc;
-		argv = ( char** )realloc( argv, argc * sizeof( char* ) );
-		argv[ argc - 1 ] = ( char* )malloc( temp - message_ptr + 1 );
-		memset( argv[ argc - 1 ], 0, temp - message_ptr + 1 );
-		memcpy( argv[ argc - 1 ], message_ptr, temp - message_ptr );
-		message_ptr = temp + 1;
-	}
-	
-	for( int i = 0; i < argc; ++i )
-	{
-		free( argv[ i ] );
-	}
-	free( argv );
-	
 	return;
 }
-
-
 
 
 void USART2_IRQHandler( void )
@@ -278,18 +255,19 @@ void USART2_IRQHandler( void )
 			_Error_Handler( __FILE__, __LINE__ );
 		}
 		__HAL_UART_ENABLE_IT( &huart, USART_IT_TC );
-		if( TX_DMA_BUFFER != NULL )
-		{
-			free( TX_DMA_BUFFER );
-			TX_DMA_BUFFER = NULL;
-		}
+		xSemaphoreGiveFromISR( vConsoleSendSemaphore, NULL );
 	}
 	if( __HAL_UART_GET_FLAG( &huart, UART_FLAG_IDLE ) )
 	{
 		__HAL_UART_CLEAR_IDLEFLAG( &huart );
-		parse_command();
+		vTaskNotifyGiveFromISR( vConsoleWorkProcHandle, NULL );
 	}
 	
 	return;
 }
+
+
+
+
+
 
