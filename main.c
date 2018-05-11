@@ -13,7 +13,7 @@
 #include <string.h>
 
 
-const char* BUILD = "0.7c:08/05/2018";
+const char* BUILD = "0.7d:11/05/2018";
 
 void _Error_Handler( char* file, int line );
 static void SystemClock_Config( void );
